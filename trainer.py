@@ -27,9 +27,9 @@ def greddy_decode(
     model, 
     source, 
     source_mask, 
-    tokenizer_src,
     tokenizer_tgt,
-    max_len, device):
+    max_len,
+    device='mps'):
     sos_idx = tokenizer_tgt.token_to_id('[SOS]')
     eos_idx = tokenizer_tgt.token_to_id('[EOS]')
 
@@ -50,7 +50,8 @@ def greddy_decode(
 
         # get next token
         prob = model.project(out[:, -1])
-        _, next_word = torch.max(prob, dim=1)
+        _, next_word = torch.max(prob, dim=-1)
+        next_word = next_word.data[0]
         decoder_input = torch.cat(
             [
                 decoder_input,
@@ -104,7 +105,6 @@ def run_validation(
                 model,
                 encoder_input,
                 encoder_mask,
-                tokenizer_src,
                 tokenizer_tgt,
                 max_len,
                 device
@@ -338,6 +338,78 @@ def train_model(config):
             "optimizer_state_dict": optimizer.state_dict(),
             "global_step": global_step
         }, model_filename)
+
+
+def run_batch_validation(
+    model,
+    batch,
+    tokenizer_tgt,
+    max_len,
+    print_msg,
+    global_step,
+    writer
+):
+    model.eval()
+    count = 0
+    source_texts = []
+    expected = []
+    predicted = []
+
+    try:
+        with os.popen('stty size', 'r') as console:
+            _, console_width = console.read().split()
+            console_width = int(console_width)
+    except:
+        console_width = 80
+
+    with torch.no_grad():
+        count += 1
+        encoder_input = batch['encoder_input']
+        encoder_mask = batch['encoder_mask']
+
+        assert encoder_input.size(0) == 1
+
+        model_out = greddy_decode(
+            model,
+            encoder_input,
+            encoder_mask,
+            tokenizer_tgt,
+            max_len,
+        )
+
+        source_text = batch["src_text"][0]
+        target_text = batch["tgt_text"][0]
+
+        model_out_text = tokenizer_tgt.decode(
+            model_out.detach().cpu().numpy()
+        )
+
+        source_texts.append(source_text)
+        expected.append(expected)
+        predicted.append(model_out_text)
+
+
+        print_msg('-' * console_width)
+        print_msg(f"{f'SOURCE: ': < 12} {source_text}")
+        print_msg(f"{f'TARGET: ': < 12} {target_text}")
+        print_msg(f"{f'PREDICTED: ': < 12} {model_out_text}")
+
+
+    if writer:
+        metric = torchmetrics.CharErrorRate()
+        cer = metric(predicted, expected)
+        writer.add_scaler('validation_cer', cer, global_step)
+        writer.flush()
+
+        metric = torchmetrics.WordErrorRate()
+        wer = metric(predicted, expected)
+        writer.add_scalar('validation wer', wer, global_step)
+        writer.flush()
+
+        metric = torchmetrics.BLEUScore()
+        blue = metric(predicted, expected)
+        writer.add_scalar('Validation BLUE', blue, global_step)
+        writer.flush()
 
 
 if __name__ == "__main__":

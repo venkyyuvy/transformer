@@ -2,8 +2,11 @@ from pathlib import Path
 
 def get_config():
     return {
+        "DEVICE": "cuda",
+        "STRATEGY": "ddp_find_unused_parameters_true",
         "batch_size": 2048,
         "num_epochs": 20,
+        "num_workers": 0,
         "lr": 10**-4,
         "seq_len": 350,
         "d_model": 512,
