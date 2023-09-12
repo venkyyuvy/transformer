@@ -81,8 +81,8 @@ class PlTransformers(pl.LightningModule):
             tokenizer_src,
             tokenizer_tgt
         ) -> None:
-        super().__init__()
         self.config = config
+        super().__init__(config)
         Path(self.config['model_folder']).mkdir(parents=True, exist_ok=True)
         self.model = model
         self.tokenizer_src = tokenizer_src
@@ -138,7 +138,6 @@ class PlTransformers(pl.LightningModule):
             batch,
             self.tokenizer_tgt,
             config['seq_len'],
-            lambda msg: batch_iterator.write(msg),
             batch_idx,
             self.log
             )
@@ -150,12 +149,15 @@ if __name__ == '__main__':
     trainer = pl.Trainer(
         accelerator=config['DEVICE'], devices=-1,
         strategy=config['STRATEGY'],
-        max_epochs = 40,
+        max_epochs = 30,
         enable_progress_bar = True,
         #overfit_batches = 10,
-        log_every_n_steps = 10,
-        precision='16-mixed',
+        log_every_n_steps = 1,
+        # precision='16-mixed',
         limit_train_batches=0.05,
+        check_val_every_n_epoch=2,
+        num_sanity_val_steps=2,
+        limit_val_batches=10,
         # limit_val_batches=0.02,
         # check_val_every_n_epoch=10,
         # limit_test_batches=0.01,
@@ -172,7 +174,7 @@ if __name__ == '__main__':
         config["seq_len"], 
         d_model=config['d_model']
     )
-
+ 
 
     # Load the model state_dict from the checkpoint
     transformer = PlTransformers(

@@ -345,7 +345,6 @@ def run_batch_validation(
     batch,
     tokenizer_tgt,
     max_len,
-    print_msg,
     global_step,
     writer
 ):
