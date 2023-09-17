@@ -21,7 +21,15 @@ class PositionalEmbedding(nn.Module):
     
 
 class Transformer(nn.Module):
-    def __init__(self, n_code, n_heads, embed_size, inner_ff_size, n_embeddings, seq_len, dropout=.1):
+    def __init__(
+            self,
+            n_code,
+            n_heads,
+            embed_size,
+            inner_ff_size,
+            n_embeddings,
+            seq_len,
+            dropout=.1):
         super().__init__()
         
         #model input

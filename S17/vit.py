@@ -1,14 +1,6 @@
 import torch
 from torch import nn
 
-patch_size=16
-
-conv2d = nn.Conv2d(in_channels=3,
-                   out_channels=768, 
-                   kernel_size=patch_size, 
-                   stride=patch_size,
-                   padding=0)
-
 class PatchEmbedding(nn.Module):
     """Turns a 2D input image into a 1D sequence learnable embedding vector.
     
@@ -36,11 +28,6 @@ class PatchEmbedding(nn.Module):
 
     # 5. Define the forward method 
     def forward(self, x):
-        # Create assertion to check that inputs are the correct shape
-        image_resolution = x.shape[-1]
-        assert image_resolution % patch_size == 0, \
-        f"Input image size must be divisble by patch size,"+\
-        f"image shape: {image_resolution}, patch size: {patch_size}"
         
         # Perform the forward pass
         x_patched = self.patcher(x)
@@ -53,6 +40,7 @@ class PatchEmbedding(nn.Module):
 class ViT(nn.Module):
     """Creates a Vision Transformer architecture with ViT-Base hyperparameters by default."""
     def __init__(self,
+                 num_classes:int=1000,
                  img_size:int=224,
                  in_channels:int=3,
                  patch_size:int=16, # Patch size
@@ -63,7 +51,6 @@ class ViT(nn.Module):
                  attn_dropout:float=0,
                  mlp_dropout:float=0.1, 
                  embedding_dropout:float=0.1,
-                 num_classes:int=1000
                  ):
         super().__init__()
         
@@ -88,6 +75,18 @@ class ViT(nn.Module):
                                               patch_size=patch_size,
                                               embedding_dim=embedding_dim)
         
+        self.encoders = nn.ModuleList(
+        [
+                nn.TransformerEncoderLayer(
+                    d_model=embed_size,
+                    nhead=n_heads,
+                    dim_feedforward=inner_ff_size,
+                    dropout=dropout,
+                    activation="gelu",
+                    batch_first=True,
+                    norm_first=True
+                ) for _ in range(n_code)]
+        )
         self.transformer_encoder = nn.Sequential(
             *[
             nn.TransformerEncoderLayer(
@@ -120,3 +119,6 @@ class ViT(nn.Module):
 
         return x       
 
+
+
+    
