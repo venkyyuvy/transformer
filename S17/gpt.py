@@ -3,9 +3,6 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 class Transformer(nn.Module):
-    # a simple lookup table that stores embeddings of a fixed dictionary and siz
-    # each token directly reads off the logits for the next token from a lookup table
-    # see more: https://pytorch.org/docs/stable/generated/torch.nn.Embedding.html
     def __init__(
         self,
         vocab_size=100,
@@ -37,14 +34,6 @@ class Transformer(nn.Module):
                     batch_first=True,
                     norm_first=True
                 ) for _ in range(self.num_layers)]
-                TransformerBlock(
-                    num_heads=self.num_heads,
-                    block_size=self.block_size,
-                    num_embed=self.num_embed,
-                    dropout=self.dropout,
-                )
-                for _ in range(self.num_layers)
-            ]
         )
         # we add the layer norm before the Linear layer
         self.ln_f = nn.LayerNorm(self.num_embed)
