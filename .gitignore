@@ -1,5 +1,9 @@
 runs/*
 weights/*
+unet/data/*
+*/lightning_logs/*
+*/bert_dataset/*
+*/gpt_dataset/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
