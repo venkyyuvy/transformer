@@ -1,3 +1,5 @@
+import torch
+import torchvision
 from torch.utils.data import Dataset
 import os
 from PIL import Image
@@ -29,7 +31,7 @@ def LoadData (path1, path2):
     
     return orig_img, mask_img
 
-def PreprocessData(img, mask, target_shape_img, target_shape_mask, path1, path2):
+def preprocessData(img, mask, target_shape_img, target_shape_mask, path1, path2):
     """
     Processes the images and mask present in the shared list and path
     Returns a NumPy dataset with images as 3-D arrays of desired size
@@ -91,7 +93,7 @@ class PetDataset(Dataset):
         single_img = Image.open(path).convert('RGB')
         single_img = single_img.resize((i_h,i_w))
         single_img = np.reshape(single_img,(i_h,i_w,i_c)) 
-        single_img = single_img/256.
+        single_img = (single_img/256.).astype(np.float32)
         
         # convert mask into an array of desired shape (1 channel)
         single_mask_ind = mask[index]
@@ -104,4 +106,122 @@ class PetDataset(Dataset):
 
     def __len__(self):
         return len(self.img)
+
+
+import torchvision
+import torchvision.transforms as T
+
+# Convert a pytorch tensor into a PIL image
+t2img = T.ToPILImage()
+# Convert a PIL image into a pytorch tensor
+img2t = T.ToTensor()
+
+
+# Oxford IIIT Pets Segmentation dataset loaded via torchvision.
+p
+
+def tensor_trimap(t):
+    x = t * 255
+    x = x.to(torch.long)
+    x = x - 1
+    return x
+
+def args_to_dict(**kwargs):
+    return kwargs
+
+def trimap2f(trimap):
+    return (img2t(trimap) * 255.0 - 1) / 2
+
+class OxfordIIITPetsAugmented(torchvision.datasets.OxfordIIITPet):
+    def __init__(
+        self,
+        root: str,
+        split: str,
+        target_types="segmentation",
+        download=False,
+        pre_transform=None,
+        post_transform=None,
+        pre_target_transform=None,
+        post_target_transform=None,
+        common_transform=None,
+    ):
+        super().__init__(
+            root=root,
+            split=split,
+            target_types=target_types,
+            download=download,
+            transform=pre_transform,
+            target_transform=pre_target_transform,
+        )
+        self.post_transform = post_transform
+        self.post_target_transform = post_target_transform
+        self.common_transform = common_transform
+
+    def __len__(self):
+        return super().__len__()
+
+    def __getitem__(self, idx):
+        (input, target) = super().__getitem__(idx)
+        
+        # Common transforms are performed on both the input and the labels
+        # by creating a 4 channel image and running the transform on both.
+        # Then the segmentation mask (4th channel) is separated out.
+        if self.common_transform is not None:
+            both = torch.cat([input, target], dim=0)
+            both = self.common_transform(both)
+            (input, target) = torch.split(both, 3, dim=0)
+        # end if
+        
+        if self.post_transform is not None:
+            input = self.post_transform(input)
+        if self.post_target_transform is not None:
+            target = self.post_target_transform(target)
+
+        return (input, target)
+    
+    
+def get_pet_dataloader(working_dir = "/kaggle/working/"):
+    pets_path_train = os.path.join(working_dir, 'OxfordPets', 'train')
+    pets_path_test = os.path.join(working_dir, 'OxfordPets', 'test')
+    transform_dict = args_to_dict(
+        pre_transform=T.ToTensor(),
+        pre_target_transform=T.ToTensor(),
+        common_transform=T.Compose([
+            T.Resize((128, 128), interpolation=T.InterpolationMode.NEAREST),
+            # Random Horizontal Flip as data augmentation.
+        ]),
+        post_transform=T.Compose([
+            # Color Jitter as data augmentation.
+            T.ColorJitter(contrast=0.3),
+        ]),
+        post_target_transform=T.Compose([
+            T.Lambda(tensor_trimap),
+        ]),
+    )
+
+    pets_train = OxfordIIITPetsAugmented(
+        root=pets_path_train,
+        split="trainval",
+        target_types="segmentation",
+        download=False,
+        **transform_dict,
+    )
+    pets_test = OxfordIIITPetsAugmented(
+        root=pets_path_test,
+        split="test",
+        target_types="segmentation",
+        download=False,
+        **transform_dict,
+    )
+    pets_train_loader = torch.utils.data.DataLoader(
+        pets_train,
+        batch_size=64,
+        shuffle=True,
+    )
+    pets_test_loader = torch.utils.data.DataLoader(
+        pets_test,
+        batch_size=21,
+        shuffle=True,
+    )
+    return pets_train_loader, pets_test_loader
 
