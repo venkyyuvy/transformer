@@ -9,7 +9,6 @@ def LoadData (path1, path2):
     """
     Looks for relevant filenames in the shared path
     Returns 2 lists for original and masked files respectively
-    
     """
     # Read the images folder like a list
     image_dataset = os.listdir(path1)
@@ -118,7 +117,6 @@ img2t = T.ToTensor()
 
 
 # Oxford IIIT Pets Segmentation dataset loaded via torchvision.
-p
 
 def tensor_trimap(t):
     x = t * 255
@@ -138,7 +136,7 @@ class OxfordIIITPetsAugmented(torchvision.datasets.OxfordIIITPet):
         root: str,
         split: str,
         target_types="segmentation",
-        download=False,
+        download=True,
         pre_transform=None,
         post_transform=None,
         pre_target_transform=None,
@@ -203,14 +201,14 @@ def get_pet_dataloader(working_dir = "/kaggle/working/"):
         root=pets_path_train,
         split="trainval",
         target_types="segmentation",
-        download=False,
+        download=True,
         **transform_dict,
     )
     pets_test = OxfordIIITPetsAugmented(
         root=pets_path_test,
         split="test",
         target_types="segmentation",
-        download=False,
+        download=True,
         **transform_dict,
     )
     pets_train_loader = torch.utils.data.DataLoader(
