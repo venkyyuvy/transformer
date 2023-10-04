@@ -5,7 +5,7 @@ import os
 from PIL import Image
 import numpy as np
 
-def LoadData (path1, path2):
+def LoadData(path1, path2):
     """
     Looks for relevant filenames in the shared path
     Returns 2 lists for original and masked files respectively
@@ -65,10 +65,6 @@ def preprocessData(img, mask, target_shape_img, target_shape_mask, path1, path2)
     return data
 
 
-base_path = "/Users/venkat/Documents/ERA/transformer/unet/data/"
-path1 = base_path + "originals/"
-path2 = base_path + "masks/"
-img, mask = LoadData(path1, path2)
 
 class PetDataset(Dataset):
     #Init dataset
