@@ -8,7 +8,7 @@ base_path = "/Users/venkat/Documents/ERA/transformer/unet/data/"
 
 if __name__ == "__main__":
     # dataset = PetDataset(base_path)
-    train_loader, test_loader = get_pet_dataloader(".", batch_size=batch_size)
+    train_loader, test_loader = get_pet_dataloader(batch_size=batch_size)
 
     # loader_args = dict(batch_size=batch_size, num_workers=os.cpu_count(), pin_memory=True)
     # train_loader = DataLoader(dataset, shuffle=True, **loader_args)

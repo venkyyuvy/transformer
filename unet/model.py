@@ -142,7 +142,7 @@ class UNet(pl.LightningModule):
             loss.backward(retain_graph=True)
         else:
             raise ValueError("invalid loss_fn values")
-
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     @staticmethod
