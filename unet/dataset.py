@@ -178,14 +178,17 @@ class OxfordIIITPetsAugmented(torchvision.datasets.OxfordIIITPet):
         return (input, target)
     
     
-def get_pet_dataloader(working_dir = "/kaggle/working/"):
+def get_pet_dataloader(working_dir: str="/kaggle/working/", 
+                       batch_size: int=4,
+                       resize: int= 128
+                       ):
     pets_path_train = os.path.join(working_dir, 'OxfordPets', 'train')
     pets_path_test = os.path.join(working_dir, 'OxfordPets', 'test')
     transform_dict = args_to_dict(
         pre_transform=T.ToTensor(),
         pre_target_transform=T.ToTensor(),
         common_transform=T.Compose([
-            T.Resize((128, 128), interpolation=T.InterpolationMode.NEAREST),
+            T.Resize((resize, resize), interpolation=T.InterpolationMode.NEAREST),
             # Random Horizontal Flip as data augmentation.
         ]),
         post_transform=T.Compose([
@@ -213,12 +216,12 @@ def get_pet_dataloader(working_dir = "/kaggle/working/"):
     )
     pets_train_loader = torch.utils.data.DataLoader(
         pets_train,
-        batch_size=64,
+        batch_size=batch_size,
         shuffle=True,
     )
     pets_test_loader = torch.utils.data.DataLoader(
         pets_test,
-        batch_size=21,
+        batch_size=batch_size,
         shuffle=True,
     )
     return pets_train_loader, pets_test_loader
