@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
+import numpy as np
 
 class ContractingBlock(nn.Module, ):
     def __init__(self, in_channels, out_channels, method="mp"):
@@ -123,22 +124,26 @@ class UNet(pl.LightningModule):
         x = self.expand2(x, skip2)
         x = self.expand3(x, skip1)
         x = self.final_conv(x)
-        return x.permute(0, 2, 3, 1).contiguous().view(-1, 3)
+        return x#.permute(0, 2, 3, 1).contiguous().view(-1, 3)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), 1E-4)
 
     def training_step(self, batch, batch_idx):
         images, targets = batch
-        targets = torch.squeeze(targets, dim=1).view(-1).long()
+        # targets = torch.squeeze(targets, dim=1).view(-1).long()
         masks_pred = self(images)
+        # masks_pred = torch.argmax(masks_pred, dim=1)\
+        #     .float()
+            # .unsqueeze(1)
         if self.loss_fn == "ce":
             loss_fn_ = nn.CrossEntropyLoss()
-            loss = loss_fn_(masks_pred, targets)
+            loss = loss_fn_(
+                masks_pred, targets.squeeze(dim=1).float())
+            print(loss)
         elif self.loss_fn == "dice":
-            masks_pred_classes = (torch.argmax(masks_pred, dim=1) + 1).unsqueeze(1).float()
-            masks_pred_classes.requires_grad = True
-            loss = self.dice_loss(masks_pred_classes, targets)
+            targets.requires_grad = True
+            loss = self.soft_dice_loss(masks_pred, targets)
             loss.backward(retain_graph=True)
         else:
             raise ValueError("invalid loss_fn values")
@@ -159,3 +164,26 @@ class UNet(pl.LightningModule):
         dice = (2. * intersection + smooth) / (union + smooth)
         
         return 1 - dice
+
+    @staticmethod
+    def soft_dice_loss(y_pred, y_true, epsilon=1e-6): 
+        """Soft dice loss calculation for arbitrary 
+        batch size, number of classes, and number of spatial dimensions.
+        Assumes the `channels_last` format.
+      
+        # Arguments
+            y_true: b x X x Y( x Z...) x c 
+            One hot encoding of ground truth
+            y_pred: b x X x Y( x Z...) x c 
+            Network output, must sum to 1 over c channel (such as after softmax) 
+            epsilon: Used for numerical stability to avoid divide by zero errors
+        """
+       
+        # skip the batch and class axis for calculating Dice score
+        axes = tuple(range(1, len(y_pred.shape)-1)) 
+        numerator = 2. * np.sum(y_pred * y_true, axes)
+        denominator = np.sum(np.square(y_pred) + np.square(y_true), axes)
+        
+        return 1 - np.mean(numerator / (denominator + epsilon)) # average over classes and batch
+
+

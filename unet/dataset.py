@@ -1,9 +1,10 @@
-import torch
-import torchvision
-from torch.utils.data import Dataset
 import os
 from PIL import Image
 import numpy as np
+import torch
+import torchvision
+from torch.utils.data import Dataset
+import torchvision.transforms as T
 
 def LoadData(path1, path2):
     """
@@ -103,8 +104,6 @@ class PetDataset(Dataset):
         return len(self.img)
 
 
-import torchvision
-import torchvision.transforms as T
 
 # Convert a pytorch tensor into a PIL image
 t2img = T.ToPILImage()
@@ -164,7 +163,6 @@ class OxfordIIITPetsAugmented(torchvision.datasets.OxfordIIITPet):
             both = torch.cat([input, target], dim=0)
             both = self.common_transform(both)
             (input, target) = torch.split(both, 3, dim=0)
-        # end if
         
         if self.post_transform is not None:
             input = self.post_transform(input)
@@ -185,11 +183,6 @@ def get_pet_dataloader(working_dir: str="/kaggle/working/",
         pre_target_transform=T.ToTensor(),
         common_transform=T.Compose([
             T.Resize((resize, resize), interpolation=T.InterpolationMode.NEAREST),
-            # Random Horizontal Flip as data augmentation.
-        ]),
-        post_transform=T.Compose([
-            # Color Jitter as data augmentation.
-            T.ColorJitter(contrast=0.3),
         ]),
         post_target_transform=T.Compose([
             T.Lambda(tensor_trimap),

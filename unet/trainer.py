@@ -3,7 +3,6 @@ from dataset import get_pet_dataloader
 import pytorch_lightning as pl
 
 batch_size = 4
-base_path = "/Users/venkat/Documents/ERA/transformer/unet/data/"
 
 
 if __name__ == "__main__":
@@ -14,7 +13,7 @@ if __name__ == "__main__":
     # train_loader = DataLoader(dataset, shuffle=True, **loader_args)
     # val_loader = DataLoader(X_valid, shuffle=False, drop_last=True, **loader_args)
     unet = UNet(
-        loss_fn="dice",
+        loss_fn="ce",
         contract_method="sc",
         expand_method="tr"
     )
