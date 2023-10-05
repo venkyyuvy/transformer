@@ -19,8 +19,10 @@ if __name__ == "__main__":
     )
     trainer = pl.Trainer(
         max_steps=10_000,
+        strategy='ddp_find_unused_parameters_true',
     )
     trainer.fit(
         model=unet,
         train_dataloaders=train_loader,
+
     )
