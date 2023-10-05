@@ -138,20 +138,17 @@ class UNet(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         images, targets = batch
         masks_pred = self(images)
-        # masks_pred = torch.argmax(masks_pred, dim=1)\
-        #     .float()
-            # .unsqueeze(1)
         if self.loss_fn == "ce":
             loss_fn_ = nn.CrossEntropyLoss()
             loss = loss_fn_(
                 masks_pred, targets.squeeze(dim=1).long())
         elif self.loss_fn == "dice":
-            one_hot_target = F.one_hot(
-                targets.squeeze(dim=1),
-                num_classes=masks_pred.shape[1])\
-            .permute(0, 3, 1, 2)
+            pred_class = masks_pred.argmax(dim=1)\
+                .unsqueeze(1).float()
+            pred_class.requires_grad = True
             loss = self.dice_loss(
-                masks_pred, one_hot_target)
+                pred_class,
+                targets.squeeze(dim=1).long())
             loss.backward(retain_graph=True)
         else:
             raise ValueError("invalid loss_fn values")
