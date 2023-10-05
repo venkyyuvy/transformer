@@ -139,8 +139,7 @@ class UNet(pl.LightningModule):
         if self.loss_fn == "ce":
             loss_fn_ = nn.CrossEntropyLoss()
             loss = loss_fn_(
-                masks_pred, targets.squeeze(dim=1).float())
-            print(loss)
+                masks_pred, targets.squeeze(dim=1).long())
         elif self.loss_fn == "dice":
             targets.requires_grad = True
             loss = self.soft_dice_loss(masks_pred, targets)
