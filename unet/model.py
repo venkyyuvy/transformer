@@ -20,6 +20,8 @@ class ContractingBlock(nn.Module, ):
         elif method == "sc":
             self.downsample = nn.Conv2d(
                 out_channels, out_channels, kernel_size=3, padding=1, stride=2)
+        else:
+            self.downsample = None
         
     def forward(self, x):
         x = self.conv1(x)
@@ -30,10 +32,12 @@ class ContractingBlock(nn.Module, ):
         x = self.bn2(x)
         x = self.relu2(x)
         
-        skip = x  # store the output for the skip connection
-        x = self.downsample(x)
+        if self.downsample:
+            skip = x  # store the output for the skip connection
+            x = self.downsample(x)
+            return x, skip
         
-        return x, skip
+        return x
 
 class ExpandingBlock(nn.Module):
     def __init__(self, in_channels, out_channels, method='tr'):
@@ -104,7 +108,7 @@ class UNet(pl.LightningModule):
         self.contract1 = ContractingBlock(in_channels, 64, contract_method)
         self.contract2 = ContractingBlock(64, 128, contract_method)
         self.contract3 = ContractingBlock(128, 256, contract_method)
-        self.contract4 = ContractingBlock(256, 512, contract_method)
+        self.contract4 = ContractingBlock(256, 512, "")
         
         self.expand1 = ExpandingBlock(512, 256, expand_method)
         self.expand2 = ExpandingBlock(256, 128, expand_method)
@@ -117,7 +121,7 @@ class UNet(pl.LightningModule):
         x, skip1 = self.contract1(x) # 32 -> 16
         x, skip2 = self.contract2(x) # 16  -> 8
         x, skip3 = self.contract3(x) # 8 -> 4
-        _, x = self.contract4(x) # 4 -> 2
+        x = self.contract4(x) # 4 -> 2
         
         # Expanding path
         x = self.expand1(x, skip3) # 8
