@@ -532,14 +532,14 @@ class LitTransformer(LightningModule):
         encoder_output = model.encode(source, source_mask) 
 
         # Initialize the decoder input with the sos token 
-        decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(source).to(model.device) 
+        decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(source).to(self.device) 
 
         while True: 
             if decoder_input.size(1) == max_len:  
                 break 
 
             # build mask for target 
-            decoder_mask = causal_mask(decoder_input.size(1)).type_as(source_mask).to(model.device) 
+            decoder_mask = causal_mask(decoder_input.size(1)).type_as(source_mask).to(self.device) 
 
             # calculate output 
             out = model.decode(encoder_output, source_mask, decoder_input, decoder_mask) 
@@ -549,7 +549,7 @@ class LitTransformer(LightningModule):
             _, next_word = torch.max(prob, dim=1)
             decoder_input = torch.cat(
                 [decoder_input,
-                 torch.empty(1, 1).type_as(source).fill_(next_word.item()).to(model.device)
+                 torch.empty(1, 1).type_as(source).fill_(next_word.item()).to(self.device)
                 ], dim = 1
             )
 
@@ -562,6 +562,8 @@ class LitTransformer(LightningModule):
         suggested_lr = 3E-04
         
         steps_per_epoch = len(self.train_dataloader())
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=self.config['lr'], eps=1e-9) 
         self.scheduler = optim.lr_scheduler.OneCycleLR(
             self.optimizer, max_lr=suggested_lr,
             steps_per_epoch=steps_per_epoch,
@@ -648,9 +650,6 @@ class LitTransformer(LightningModule):
             self.tokenizer_src.get_vocab_size(),
             self.tokenizer_tgt.get_vocab_size())
         
-        #Optimizer
-      #   self.optimizer = torch.optim.Adam(
-      #       self.model.parameters(), lr=self.config['lr'], eps=1e-9) 
       # 
         # Keep 90% for training, 10% for validation 
         train_ds_size = int(0.9* len(ds_raw))
@@ -696,7 +695,7 @@ class LitTransformer(LightningModule):
             self.train_ds, batch_size=self.config['batch_size'], 
             shuffle=True, collate_fn = self.collate_fn, 
             # num_workers=min(os.cpu_count(), 4),
-            persistent_workers=True,
+            # persistent_workers=True,
             pin_memory=True
         )
 
@@ -706,7 +705,7 @@ class LitTransformer(LightningModule):
             batch_size=1,
             shuffle=True, 
             # num_workers=min(os.cpu_count(), 4),
-            persistent_workers=True,
+            # persistent_workers=True,
             pin_memory=True
         ) 
     
