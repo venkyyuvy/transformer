@@ -265,7 +265,7 @@ class LitTransformer(LightningModule):
         # (batch, -seq_len, -vocab_size)
         return self.projection_layer(x)
 
-    def training_step(self, batch):
+    def training_step(self, batch, batch_idx):
         x = batch
         encoder_input = x['encoder_input'].to(self.device)
         decoder_input = x['decoder_input'].to(self.device)
@@ -307,7 +307,7 @@ class LitTransformer(LightningModule):
     #     if not skip_lr_sched:
     #         self.scheduler.step()
 
-    def validation_step(self, batch, ):       
+    def validation_step(self, batch, batch_idx): 
         max_len = self.config['seq_len'] 
         
         if self.val_count == self.val_num_examples:             
