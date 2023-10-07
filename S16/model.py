@@ -222,7 +222,7 @@ class ProjectionLayer(nn.Module):
         super().__init__()
         self.proj = nn.Linear(d_model, vocab_size)
         
-    def forward(self, x) -> None:
+    def forward(self, x) -> torch.Tensor:
         #- (batch, seq_len, d_model) ---> (batch, seq_len, vocab_size)
         return torch.log_softmax(self.proj(x), dim = -1)
 
@@ -281,57 +281,59 @@ def build_transformer(
     d_ff: int=256
     ) -> Transformer:
         
-        # Create the embedding: layers
-        src_embed = InputEmbeddings(d_model, src_vocab_size)
-        tgt_embed = InputEmbeddings(d_model, tgt_vocab_size)
+    # Create the embedding: layers
+    src_embed = InputEmbeddings(d_model, src_vocab_size)
+    tgt_embed = InputEmbeddings(d_model, tgt_vocab_size)
+    
+    # Create the positional encoding layers
+    src_pos = PositionalEncoding(d_model, src_seq_len, dropout)
+    tgt_pos = PositionalEncoding(d_model, tgt_seq_len, dropout)
+    
+    # Create the encoder blocks
+    encoder_blocks = []
+    for _ in range(N//2):
+        encoder_self_attention_block = MultiHeadAttentionBlock(d_model, h, dropout)
+        feed_forward_block = FeedForwardBlock(d_model, d_ff, dropout)
+        encoder_block = EncoderBlock(encoder_self_attention_block, feed_forward_block, dropout)
+        encoder_blocks.append(encoder_block)
         
-        # Create the positional encoding layers
-        src_pos = PositionalEncoding(d_model, src_seq_len, dropout)
-        tgt_pos = PositionalEncoding(d_model, tgt_seq_len, dropout)
+    #Create the decoder blocks
+    decoder_blocks = []
+    for _ in range(N//2):
+        decoder_self_attention_block = MultiHeadAttentionBlock(d_model, h, dropout)
+        decoder_cross_attention_block = MultiHeadAttentionBlock(d_model, h, dropout)
+        feed_forward_block = FeedForwardBlock(d_model, d_ff, dropout)
+        decoder_block = DecoderBlock(decoder_self_attention_block, decoder_cross_attention_block, feed_forward_block, dropout)
+        decoder_blocks.append(decoder_block)
         
-        # Create the encoder blocks
-        encoder_blocks = []
-        for _ in range(N//2):
-            encoder_self_attention_block = MultiHeadAttentionBlock(d_model, h, dropout)
-            feed_forward_block = FeedForwardBlock(d_model, d_ff, dropout)
-            encoder_block = EncoderBlock(encoder_self_attention_block, feed_forward_block, dropout)
-            encoder_blocks.append(encoder_block)
-            
-        #Create the decoder blocks
-        decoder_blocks = []
-        for _ in range(N//2):
-            decoder_self_attention_block = MultiHeadAttentionBlock(d_model, h, dropout)
-            decoder_cross_attention_block = MultiHeadAttentionBlock(d_model, h, dropout)
-            feed_forward_block = FeedForwardBlock(d_model, d_ff, dropout)
-            decoder_block = DecoderBlock(decoder_self_attention_block, decoder_cross_attention_block, feed_forward_block, dropout)
-            decoder_blocks.append(decoder_block)
-            
-        e1, e2, e3 = encoder_blocks
-        d1, d2, d3 = decoder_blocks
-        encoder_blocks1 = [e1, e2, e3, e3, e2, e1]
-        decoder_blocks1 = [d1, d2, d3, d3, d2, d1]
-       
-            
-        # Create the encoder and decoder
-        encoder = Encoder(nn.ModuleList (encoder_blocks1))
-        decoder = Decoder(nn.ModuleList(decoder_blocks1))
+    e1, e2, e3 = encoder_blocks
+    d1, d2, d3 = decoder_blocks
+    encoder_blocks1 = [e1, e2, e3, e3, e2, e1]
+    decoder_blocks1 = [d1, d2, d3, d3, d2, d1]
+   
         
-        # Create the projection layer
-        projection_layer = ProjectionLayer(d_model, tgt_vocab_size)
-        
-        # Create the transformer
-        transformer = Transformer(encoder, decoder, src_embed, tgt_embed, src_pos, tgt_pos, projection_layer)
-        
-        # Initialize the parameters
-        for p in transformer.parameters():
-            if p.dim() > 1:
-                #nn.init.xavier_uniform_(p)
-                nn.init.normal_(p, std=0.02)
+    # Create the encoder and decoder
+    encoder = Encoder(nn.ModuleList (encoder_blocks1))
+    decoder = Decoder(nn.ModuleList(decoder_blocks1))
+    
+    # Create the projection layer
+    projection_layer = ProjectionLayer(d_model, tgt_vocab_size)
+    
+    # Create the transformer
+    transformer = Transformer(
+    encoder,
+    decoder, src_embed, tgt_embed, src_pos, tgt_pos, projection_layer)
+    
+    # Initialize the parameters
+    for p in transformer.parameters():
+        if p.dim() > 1:
+            #nn.init.xavier_uniform_(p)
+            nn.init.normal_(p, std=0.02)
 
-        n_param = sum(p.numel() for p in transformer.parameters())
-        print("Total Model Parameters:", n_param)
+    n_param = sum(p.numel() for p in transformer.parameters())
+    print("Total Model Parameters:", n_param)
 
-        return transformer
+    return transformer
 
 
 class LitTransformer(LightningModule):
@@ -366,23 +368,24 @@ class LitTransformer(LightningModule):
         
         
     def forward(self, x):
-        return self.model(x)
+        encoder_input = x['encoder_input'].to(self.device)
+        decoder_input = x['decoder_input'].to(self.device)
+        encoder_mask = x['encoder_mask'].to(self.device)
+        decoder_mask = x['decoder_mask'].to(self.device)
+        encoder_output = self.model.encode(
+            encoder_input, encoder_mask) # (B, seq_len, d_model) 
+        decoder_output = self.model.decode(
+            encoder_output, encoder_mask, decoder_input, decoder_mask) 
+        proj_output = self.model.project(decoder_output) # (B, seq_len, vocab_size) 
+        return proj_output
 
     def training_step(self, batch, batch_idx):
-        encoder_input = batch['encoder_input']
-        decoder_input = batch['decoder_input']
-        encoder_mask = batch['encoder_mask']
-        decoder_mask = batch['decoder_mask']
         
         
         with torch.cuda.amp.autocast(enabled=True):
             
             # Run the tensors through the encoder, decoder and the projection layer 
-            encoder_output = self.model.encode(encoder_input, encoder_mask) # (B, seq_len, d_model) 
-            decoder_output = self.model.decode(
-                encoder_output, encoder_mask, decoder_input, decoder_mask) 
-            proj_output = self.model.project(decoder_output) # (B, seq_len, vocab_size) 
-
+            proj_output = self(batch)
             # Compare the output with the label 
             label = batch['label'] # (B, seg_len)
 
