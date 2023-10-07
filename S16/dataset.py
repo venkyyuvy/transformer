@@ -211,109 +211,54 @@ class TranslateDataset(LightningDataModule):
 
     def train_dataloader(self):                   
         return DataLoader(
-            self.train_ds, batch_size=self.config['batch_size'], 
-            shuffle=True, collate_fn = self.collate_fn, 
-            num_workers=min(os.cpu_count(), 4),
-            persistent_workers=True,
-            pin_memory=True
+            self.train_ds, 
+            batch_size=self.config['batch_size'], 
+            shuffle=True, 
+            collate_fn = self.collate_fn, 
+            # num_workers=min(os.cpu_count(), 4),
+            # persistent_workers=True,
+            pin_memory=True,
         )
 
     def val_dataloader(self):
         return DataLoader(
             self.val_ds,
             batch_size=1,
-            shuffle=True, 
-            num_workers=min(os.cpu_count(), 4),
-            persistent_workers=True,
-            pin_memory=True
+            shuffle=False, 
+            # num_workers=min(os.cpu_count(), 4),
+            # persistent_workers=True,
+            pin_memory=True,
         ) 
     
     def collate_fn(self, batch):
-        max_encoder_input_len = max(
-            [len(item["encoder_input"]) for item in batch])
-        max_decoder_input_len = max(
-            [len(item["decoder_input"]) for item in batch])
-
+        encoder_input_max = max(x["encoder_str_length"] for x in batch)
+        decoder_input_max = max(x["decoder_str_length"] for x in batch)
         encoder_inputs = []
         decoder_inputs = []
-        labels = []
-        for item in batch:
-            encoder_input = item["encoder_input"]
-            decoder_input = item["decoder_input"]
-            label = item["label"]
+        encoder_mask = []
+        decoder_mask = []
+        label = []
+        src_text = []
+        tgt_text = []
 
-            # Pad the encoder input
-            encoder_input = torch.cat(
-                (
-                    encoder_input,
-                    torch.tensor(
-                        [self.tokenizer_src.token_to_id("[PAD]")]
-                        * (max_encoder_input_len - len(encoder_input)),
-                        dtype=torch.int64,
-                    ),
-                ),
-                dim=0,
-            )
-
-            # Pad the decoder input
-            decoder_input = torch.cat(
-                (
-                    decoder_input,
-                    torch.tensor(
-                        [self.tokenizer_tgt.token_to_id("[PAD]")]
-                        * (max_decoder_input_len - len(decoder_input)),
-                        dtype=torch.int64,
-                    ),
-                ),
-                dim=0,
-            )
-
-            # Pad the label
-            label = torch.cat(
-                (
-                    label,
-                    torch.tensor(
-                        [self.tokenizer_tgt.token_to_id("[PAD]")]
-                        * (max_decoder_input_len - len(label)),
-                        dtype=torch.int64,
-                    ),
-                ),
-                dim=0,
-            )
-
-            encoder_inputs.append(encoder_input)
-            decoder_inputs.append(decoder_input)
-            labels.append(label)
-
-        encoder_inputs = torch.stack(encoder_inputs)
-        decoder_inputs = torch.stack(decoder_inputs)
-        encoder_mask = (
-            (encoder_inputs != self.tokenizer_src.token_to_id("[PAD]"))
-            .unsqueeze(1)
-            .unsqueeze(1)
-            .int()
-        )
-        decoder_mask = (
-            causal_mask(decoder_inputs.size(1))
-            .repeat(decoder_inputs.size(0), 1, 1, 1)
-            .int()
-        ) & (
-            (decoder_inputs != self.tokenizer_tgt.token_to_id("[PAD]"))
-            .unsqueeze(1)
-            .unsqueeze(1)
-            .int()
-        )
-
-        labels = torch.stack(labels)
-        src_texts = [item["src_text"] for item in batch]
-        tgt_texts = [item["tgt_text"] for item in batch]
-
+        for b in batch:
+            encoder_inputs.append(b["encoder_input"][:encoder_input_max])
+            decoder_inputs.append(b["decoder_input"][:decoder_input_max])
+            encoder_mask.append((b["encoder_mask"]\
+                [0, 0, :encoder_input_max])\
+                .unsqueeze(0).unsqueeze(0).unsqueeze(0).int())
+            decoder_mask.append((b["decoder_mask"]\
+                [0, :decoder_input_max, :decoder_input_max])\
+                .unsqueeze(0).unsqueeze(0).int())
+            label.append(b["label"][:decoder_input_max])
+            src_text.append(b["src_text"])
+            tgt_text.append(b["tgt_text"])
         return {
-            "encoder_input": encoder_inputs,
-            "decoder_input": decoder_inputs,
-            "encoder_mask": encoder_mask,
-            "decoder_mask": decoder_mask,
-            "label": labels,
-            "src_text": src_texts,
-            "tgt_text": tgt_texts,
+          "encoder_input":torch.vstack(encoder_inputs),
+          "decoder_input":torch.vstack(decoder_inputs),
+          "encoder_mask": torch.vstack(encoder_mask),
+          "decoder_mask": torch.vstack(decoder_mask),
+          "label":torch.vstack(label),
+          "src_text":src_text,
+          "tgt_text":tgt_text
         }

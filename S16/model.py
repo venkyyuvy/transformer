@@ -266,11 +266,10 @@ class LitTransformer(LightningModule):
         return self.projection_layer(x)
 
     def training_step(self, batch, batch_idx):
-        x = batch
-        encoder_input = x['encoder_input'].to(self.device)
-        decoder_input = x['decoder_input'].to(self.device)
-        encoder_mask = x['encoder_mask'].to(self.device)
-        decoder_mask = x['decoder_mask'].to(self.device)
+        encoder_input = batch['encoder_input'].to(self.device)
+        decoder_input = batch['decoder_input'].to(self.device)
+        encoder_mask = batch['encoder_mask'].to(self.device)
+        decoder_mask = batch['decoder_mask'].to(self.device)
         
         # Run the tensors through the encoder, decoder and the projection layer 
         encoder_output = self.encode(
@@ -279,7 +278,7 @@ class LitTransformer(LightningModule):
             encoder_output, encoder_mask, decoder_input, decoder_mask) 
         proj_output = self.project(decoder_output) # (B, seq_len, vocab_size) 
         # Compare the output with the label 
-        label = batch['label'] # (B, seg_len)
+        label = batch['label'].to(self.device) # (B, seg_len)
 
 
         self.loss_fn = nn.CrossEntropyLoss(
