@@ -325,8 +325,8 @@ class LitTransformer(LightningModule):
             self,
             encoder_input,
             encoder_mask,
-            self.tokenizer_src,
-            self.tokenizer_tgt,
+            self.trainer.datamodule.tokenizer_src,
+            self.trainer.datamodule.tokenizer_tgt,
             max_len,
         )
 
