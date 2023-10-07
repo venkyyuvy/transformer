@@ -213,8 +213,8 @@ class TranslateDataset(LightningDataModule):
         return DataLoader(
             self.train_ds, batch_size=self.config['batch_size'], 
             shuffle=True, collate_fn = self.collate_fn, 
-            # num_workers=min(os.cpu_count(), 4),
-            # persistent_workers=True,
+            num_workers=min(os.cpu_count(), 4),
+            persistent_workers=True,
             pin_memory=True
         )
 
@@ -223,8 +223,8 @@ class TranslateDataset(LightningDataModule):
             self.val_ds,
             batch_size=1,
             shuffle=True, 
-            # num_workers=min(os.cpu_count(), 4),
-            # persistent_workers=True,
+            num_workers=min(os.cpu_count(), 4),
+            persistent_workers=True,
             pin_memory=True
         ) 
     
