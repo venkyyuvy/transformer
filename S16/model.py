@@ -179,17 +179,31 @@ class Encoder(nn.Module):
         return self.norm(x)
         
 class DecoderBlock(nn.Module):
-    def __init__(self, self_attention_block: MultiHeadAttentionBlock, cross_attention_block: MultiHeadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float ) -> None:
+    def __init__(
+            self,
+            self_attention_block: MultiHeadAttentionBlock,
+            cross_attention_block: MultiHeadAttentionBlock,
+            feed_forward_block: FeedForwardBlock,
+            dropout: float 
+        ) -> None:
         super().__init__()
         self.self_attention_block = self_attention_block
         self.cross_attention_block = cross_attention_block
         self.feed_forward_block = feed_forward_block
-        self.residual_connections = nn.ModuleList([ResidualConnection(dropout) for _ in range(3)])
+        self.residual_connections = nn.ModuleList(
+            [ResidualConnection(dropout) for _ in range(3)])
         
     def forward(self, x, encoder_output, src_mask, tgt_mask):
-        x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, tgt_mask))
-        x = self.residual_connections[1](x, lambda x: self.cross_attention_block(x, encoder_output, encoder_output, src_mask))
-        x = self.residual_connections[2](x, self.feed_forward_block)
+        x = self.residual_connections[0](
+            x, lambda x: self.self_attention_block(
+                x, x, x, tgt_mask)
+        )
+        x = self.residual_connections[1](
+            x, lambda x: self.cross_attention_block(
+                x, encoder_output, encoder_output, src_mask)
+        )
+        x = self.residual_connections[2](
+            x, self.feed_forward_block)
         return x
 
 class Decoder(nn.Module):
@@ -213,7 +227,16 @@ class ProjectionLayer(nn.Module):
         return torch.log_softmax(self.proj(x), dim = -1)
 
 class Transformer(nn.Module):
-    def __init__(self, encoder: Encoder, decoder: Decoder, src_embed: InputEmbeddings, tgt_embed: InputEmbeddings, src_pos: PositionalEncoding, tgt_pos: PositionalEncoding, projection_layer: ProjectionLayer) -> None:
+    def __init__(
+            self,
+            encoder: Encoder,
+            decoder: Decoder,
+            src_embed: InputEmbeddings,
+            tgt_embed: InputEmbeddings,
+            src_pos: PositionalEncoding,
+            tgt_pos: PositionalEncoding,
+            projection_layer: ProjectionLayer
+        ) -> None:
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
@@ -229,11 +252,18 @@ class Transformer(nn.Module):
         src = self.src_pos(src)
         return self.encoder(src, src_mask)
     
-    def decode(self, encoder_output: torch.Tensor, src_mask: torch.Tensor, tgt: torch.Tensor, tgt_mask: torch.Tensor):
+    def decode(
+            self,
+            encoder_output: torch.Tensor,
+            src_mask: torch.Tensor,
+            tgt: torch.Tensor,
+            tgt_mask: torch.Tensor
+        ):
         #- (batch, -seq_len, -d_model)
         tgt = self.tgt_embed(tgt)
         tgt = self.tgt_pos(tgt)
-        return self.decoder(tgt, encoder_output, src_mask, tgt_mask)
+        return self.decoder(
+            tgt, encoder_output, src_mask, tgt_mask)
     
     def project(self, x):
         # (batch, -seq_len, -vocab_size)
@@ -302,9 +332,6 @@ def build_transformer(
         print("Total Model Parameters:", n_param)
 
         return transformer
-
-
-
 
 
 class LitTransformer(LightningModule):
@@ -561,8 +588,13 @@ class LitTransformer(LightningModule):
             yield item['translation'][lang]
     
     def get_model(self, config, vocab_src_len, vocab_tgt_len): 
-        model = build_transformer(vocab_src_len, vocab_tgt_len, config["seq_len"], 
-                                  config["seq_len"], d_model=config["d_model"])
+        model = build_transformer(
+            vocab_src_len, 
+            vocab_tgt_len,
+            config["seq_len"],
+            config["seq_len"],
+            d_model=config["d_model"]
+        )
         return model
     
     def get_or_build_tokenizer(self, config, ds, lang): 
@@ -663,7 +695,7 @@ class LitTransformer(LightningModule):
         return DataLoader(
             self.train_ds, batch_size=self.config['batch_size'], 
             shuffle=True, collate_fn = self.collate_fn, 
-            num_workers=min(os.cpu_count(), 4),
+            # num_workers=min(os.cpu_count(), 4),
             persistent_workers=True,
             pin_memory=True
         )
@@ -673,7 +705,7 @@ class LitTransformer(LightningModule):
             self.val_ds,
             batch_size=1,
             shuffle=True, 
-            num_workers=min(os.cpu_count(), 4),
+            # num_workers=min(os.cpu_count(), 4),
             persistent_workers=True,
             pin_memory=True
         ) 
