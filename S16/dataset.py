@@ -1,9 +1,27 @@
+from torch.utils.data import DataLoader, random_split
+
+import os 
+from pathlib import Path
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
+from pytorch_lightning import LightningDataModule
+from datasets import load_dataset 
+from tokenizers import Tokenizer
+from tokenizers.models import WordLevel
+from tokenizers.trainers import WordLevelTrainer
+from tokenizers.pre_tokenizers import Whitespace 
 
 class BilingualDataset (Dataset):
-    def __init__(self, ds, tokenizer_src, tokenizer_tgt, src_lang, tgt_lang, seq_len):
+    def __init__(
+        self,
+        ds,
+        tokenizer_src,
+        tokenizer_tgt,
+        src_lang,
+        tgt_lang,
+        seq_len
+    ):
         super().__init__()
         self.seq_len = seq_len
         
@@ -13,9 +31,12 @@ class BilingualDataset (Dataset):
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
 
-        self.sos_token = torch.tensor([tokenizer_tgt.token_to_id("[SOS]")],dtype=torch.int64)
-        self.eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")],dtype=torch.int64)
-        self.pad_token = torch.tensor([tokenizer_tgt.token_to_id("[PAD]")],dtype=torch.int64)
+        self.sos_token = torch.tensor(
+            [tokenizer_tgt.token_to_id("[SOS]")],dtype=torch.int64)
+        self.eos_token = torch.tensor(
+            [tokenizer_tgt.token_to_id("[EOS]")],dtype=torch.int64)
+        self.pad_token = torch.tensor(
+            [tokenizer_tgt.token_to_id("[PAD]")],dtype=torch.int64)
         
     def __len__(self): 
         return len(self.ds) 
@@ -93,3 +114,206 @@ def causal_mask(size):
         torch.ones((1, size, size)),
         diagonal=1).type(torch.int)
     return mask == 0 
+
+
+class TranslateDataset(LightningDataModule):
+    def __init__(
+        self,
+        config,
+        num_workers=2,
+    ):
+        super().__init__()
+        self.config = config
+        self.num_workers = num_workers
+        self.batch_size = config["batch_size"]
+
+    def get_all_sentences(self, ds, lang): 
+        for item in ds: 
+            yield item['translation'][lang]
+    
+    
+    def get_or_build_tokenizer(self, config, ds, lang): 
+        tokenizer_path = Path(config['tokenizer_file'].format(lang)) 
+        if not Path.exists(tokenizer_path): 
+            # Most code taken from: https://huggingface.co/docs/tokenizers/quicktour 
+            tokenizer = Tokenizer(WordLevel(unk_token="[UNK]")) 
+            tokenizer.pre_tokenizer = Whitespace() 
+            trainer = WordLevelTrainer(
+                special_tokens=["[UNK]", "[PAD]", "[SOS]", "[EOS]"],
+                min_frequency=2)
+            tokenizer.train_from_iterator(
+                self.get_all_sentences(ds, lang), trainer=trainer)
+            tokenizer.save(str(tokenizer_path)) 
+        else: 
+            tokenizer = Tokenizer.from_file(str(tokenizer_path)) 
+        return tokenizer
+
+    def setup(self, stage=None):  
+        ds_raw = load_dataset(
+            'opus_books', 
+            f"{self.config['lang_src']}-{self.config['lang_tgt']}",
+            split='train'
+        )  
+        
+        # Define a function to filter dataset as per assignment requirement
+        def filter_examples(example):
+            source_text = example['translation'][self.config['lang_src']]
+            target_text = example['translation'][self.config['lang_tgt']]
+            return len(source_text) <= 150 and len(target_text) <= len(source_text) + 10
+
+        # Filter the dataset based on the custom filter function
+        ds_raw = ds_raw.filter(filter_examples)
+        
+        # Build tokenizers 
+        self.tokenizer_src = self.get_or_build_tokenizer(
+            self.config, ds_raw, self.config['lang_src'])
+        self.tokenizer_tgt = self.get_or_build_tokenizer(
+            self.config, ds_raw, self.config['lang_tgt'])
+        
+        
+        # Keep 90% for training, 10% for validation 
+        train_ds_size = int(0.9* len(ds_raw))
+        val_ds_size = len(ds_raw) - train_ds_size
+        train_ds_raw, val_ds_raw = random_split(
+            ds_raw, [train_ds_size, val_ds_size])
+
+        self.train_ds = BilingualDataset(
+            train_ds_raw,
+            self.tokenizer_src,
+            self.tokenizer_tgt,
+            self.config['lang_src'],
+            self.config['lang_tgt'],
+            self.config['seq_len']
+        )
+        self.val_ds = BilingualDataset(
+            val_ds_raw,
+            self.tokenizer_src,
+            self.tokenizer_tgt,
+            self.config['lang_src'],
+            self.config['lang_tgt'],
+            self.config['seq_len']
+        )
+
+        # Find the maximum length of each sentence in the source and target sentence 
+        max_len_src = 0 
+        max_len_tgt = 0 
+
+        for item in ds_raw: 
+            src_ids = self.tokenizer_src.encode(item['translation'][self.config['lang_src']]).ids
+            tgt_ids = self.tokenizer_src.encode(item['translation'][self.config['lang_tgt']]).ids
+            max_len_src = max(max_len_src, len(src_ids))
+            max_len_tgt = max(max_len_tgt, len(tgt_ids))
+
+        print(f'Maximum length of source sentence: {max_len_src}') 
+        print(f'Maximum length of target sentence: {max_len_tgt}') 
+  
+
+
+    def train_dataloader(self):                   
+        return DataLoader(
+            self.train_ds, batch_size=self.config['batch_size'], 
+            shuffle=True, collate_fn = self.collate_fn, 
+            # num_workers=min(os.cpu_count(), 4),
+            # persistent_workers=True,
+            pin_memory=True
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_ds,
+            batch_size=1,
+            shuffle=True, 
+            # num_workers=min(os.cpu_count(), 4),
+            # persistent_workers=True,
+            pin_memory=True
+        ) 
+    
+    def collate_fn(self, batch):
+        max_encoder_input_len = max(
+            [len(item["encoder_input"]) for item in batch])
+        max_decoder_input_len = max(
+            [len(item["decoder_input"]) for item in batch])
+
+        encoder_inputs = []
+        decoder_inputs = []
+        labels = []
+        for item in batch:
+            encoder_input = item["encoder_input"]
+            decoder_input = item["decoder_input"]
+            label = item["label"]
+
+            # Pad the encoder input
+            encoder_input = torch.cat(
+                (
+                    encoder_input,
+                    torch.tensor(
+                        [self.tokenizer_src.token_to_id("[PAD]")]
+                        * (max_encoder_input_len - len(encoder_input)),
+                        dtype=torch.int64,
+                    ),
+                ),
+                dim=0,
+            )
+
+            # Pad the decoder input
+            decoder_input = torch.cat(
+                (
+                    decoder_input,
+                    torch.tensor(
+                        [self.tokenizer_tgt.token_to_id("[PAD]")]
+                        * (max_decoder_input_len - len(decoder_input)),
+                        dtype=torch.int64,
+                    ),
+                ),
+                dim=0,
+            )
+
+            # Pad the label
+            label = torch.cat(
+                (
+                    label,
+                    torch.tensor(
+                        [self.tokenizer_tgt.token_to_id("[PAD]")]
+                        * (max_decoder_input_len - len(label)),
+                        dtype=torch.int64,
+                    ),
+                ),
+                dim=0,
+            )
+
+            encoder_inputs.append(encoder_input)
+            decoder_inputs.append(decoder_input)
+            labels.append(label)
+
+        encoder_inputs = torch.stack(encoder_inputs)
+        decoder_inputs = torch.stack(decoder_inputs)
+        encoder_mask = (
+            (encoder_inputs != self.tokenizer_src.token_to_id("[PAD]"))
+            .unsqueeze(1)
+            .unsqueeze(1)
+            .int()
+        )
+        decoder_mask = (
+            causal_mask(decoder_inputs.size(1))
+            .repeat(decoder_inputs.size(0), 1, 1, 1)
+            .int()
+        ) & (
+            (decoder_inputs != self.tokenizer_tgt.token_to_id("[PAD]"))
+            .unsqueeze(1)
+            .unsqueeze(1)
+            .int()
+        )
+
+        labels = torch.stack(labels)
+        src_texts = [item["src_text"] for item in batch]
+        tgt_texts = [item["tgt_text"] for item in batch]
+
+        return {
+            "encoder_input": encoder_inputs,
+            "decoder_input": decoder_inputs,
+            "encoder_mask": encoder_mask,
+            "decoder_mask": decoder_mask,
+            "label": labels,
+            "src_text": src_texts,
+            "tgt_text": tgt_texts,
+        }
