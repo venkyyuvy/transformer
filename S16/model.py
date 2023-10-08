@@ -290,9 +290,9 @@ class LitTransformer(LightningModule):
             proj_output.view(-1, self.trainer.datamodule.tokenizer_tgt.get_vocab_size()),
             label.view(-1)
         ) 
-        # Calling self.log will surface up scalars for you in TensorBoard
-        self.log("loss", loss.item(), prog_bar=True) 
-        #batch_iterator.set_postfix({"loss": f"{loss.item():6.3f}"}) 
+        self.log("loss", loss.item(), 
+                 prog_bar=True on_step=True,
+                 on_epoch=True)
         
         
 
@@ -372,9 +372,10 @@ class LitTransformer(LightningModule):
         pass
     
       
-    def on_train_epoch_end(self):
+    def on_train_epoch_end(self, outputs):
         
-        # Save the model at the end of every 5th epoch - to save memory
+        loss = sum(output['loss'] for output in outputs) / len(outputs)
+        print(f"epoch {self.trainer.current_epoch} loss:", loss)
         curr_epoch = self.trainer.current_epoch + 1
         if curr_epoch % 5 == 0:
             model_filename = get_weights_file_path(

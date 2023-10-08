@@ -1,10 +1,11 @@
 
 # Translation using transformers
 
-Optimizing the training time of transfomer
+English to French translation using Opus dataset. Optimizing the training time of transformer
 
 - One cycle policy
-- Mixed precision training
+- Mixed precision training (Mixed-16)
 - dynamic max_sequence length for batches
 - cycle encoder and decoder layers
-- dropping long translation datapoints
+- Removes all English sentences with more than 150 "tokens"
+- Removes all french sentences where len(fench_sentences) > len(english_sentrnce) + 10

@@ -207,8 +207,6 @@ class TranslateDataset(LightningDataModule):
         print(f'Maximum length of source sentence: {max_len_src}') 
         print(f'Maximum length of target sentence: {max_len_tgt}') 
   
-
-
     def train_dataloader(self):                   
         return DataLoader(
             self.train_ds, 
@@ -224,7 +222,7 @@ class TranslateDataset(LightningDataModule):
         return DataLoader(
             self.val_ds,
             batch_size=1,
-            shuffle=False, 
+            shuffle=True, 
             # num_workers=min(os.cpu_count(), 4),
             # persistent_workers=True,
             pin_memory=True,
