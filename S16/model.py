@@ -291,7 +291,7 @@ class LitTransformer(LightningModule):
             label.view(-1)
         ) 
         self.log("loss", loss.item(), 
-                 prog_bar=True on_step=True,
+                 prog_bar=True, on_step=True,
                  on_epoch=True)
         
         
