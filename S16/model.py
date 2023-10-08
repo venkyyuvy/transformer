@@ -372,10 +372,8 @@ class LitTransformer(LightningModule):
         pass
     
       
-    def on_train_epoch_end(self, outputs):
+    def on_train_epoch_end(self, ):
         
-        loss = sum(output['loss'] for output in outputs) / len(outputs)
-        print(f"epoch {self.trainer.current_epoch} loss:", loss)
         curr_epoch = self.trainer.current_epoch + 1
         if curr_epoch % 5 == 0:
             model_filename = get_weights_file_path(
