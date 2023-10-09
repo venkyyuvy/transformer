@@ -9,3 +9,6 @@ English to French translation using Opus dataset. Optimizing the training time o
 - cycle encoder and decoder layers
 - Removes all English sentences with more than 150 "tokens"
 - Removes all french sentences where len(fench_sentences) > len(english_sentrnce) + 10
+
+
+Achieved a training loss of 1.5 with 30 epoches.
