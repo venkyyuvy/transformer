@@ -24,6 +24,7 @@ class GPTConfig:
     n_head = 6
     n_layer = 6
     dropout = 0.2
+    save_path = "."
 
 bigram_config = BigramConfig()
 gpt_config = GPTConfig()
