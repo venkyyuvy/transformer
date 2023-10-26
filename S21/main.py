@@ -27,7 +27,7 @@ def train_gpt(config):
         loss.backward()
         optimizer.step()
 
-    torch.save(m.state_dict(), config.save_path)
+    torch.save(m.state_dict(), config.save_path + "shakespeare.pt")
     # generate from the model
     context = torch.zeros((1, 1), dtype=torch.long, device=config.device)
     print(decode(m.generate(context, max_new_tokens=500)[0].tolist()))
