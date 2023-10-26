@@ -15,7 +15,7 @@ def train_gpt(config):
 
         # every once in a while evaluate the loss on train and val sets
         if iter % config.eval_interval == 0 or iter == config.max_iters - 1:
-            losses = estimate_loss()
+            losses = estimate_loss(m)
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
 
         # sample a batch of data
