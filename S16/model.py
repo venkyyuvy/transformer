@@ -5,7 +5,6 @@ from torch import optim
  
 import torchmetrics
 import torchmetrics.text
-from torch.utils.tensorboard import SummaryWriter 
 
 from pytorch_lightning import LightningModule
 from dataset import causal_mask 
@@ -76,7 +75,7 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe) 
         
     def forward(self, x): 
-        x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False) # (batch, seq_len, d_model) 
+        x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False) # (batch, seq_len, d_model)
         return self.dropout(x)
     
 class ResidualConnection(nn.Module):
@@ -111,12 +110,17 @@ class MultiHeadAttentionBlock(nn.Module):
         d_k = query.shape[-1]
         # Just apply the formula from the paper
         # (batch, h, seq_len, d_k) --> (batch, h, seq_len, seq_len)
-        attention_scores = (query @ key.transpose(-2, -1)) / math.sqrt(d_k)
+        attention_scores = (query @ key.transpose(-2, -1)) \
+            / math.sqrt(d_k)
         if mask is not None:
             # Write a very low value (indicating -inf) to the positions where mask == 0
-            _MASKING_VALUE = -1e9 if attention_scores.dtype == torch.float32 else -1e+4
+            if attention_scores.dtype == torch.float32:
+                _MASKING_VALUE = -1e9  
+            else:
+                _MASKING_VALUE = -1e+4  
             attention_scores.masked_fill_(mask == 0, _MASKING_VALUE)
-        attention_scores = attention_scores.softmax(dim=-1) # (batch, h, seq_len, seq_len) # Apply soft
+        attention_scores = attention_scores.softmax(dim=-1)
+        # (batch, h, seq_len, seq_len) # Apply soft
         if dropout is not None:
             attention_scores = dropout(attention_scores)
         # (batch, h, seq_len, seq_len) --> (batch, h, seq_len, d_k)
@@ -124,35 +128,52 @@ class MultiHeadAttentionBlock(nn.Module):
         return (attention_scores @ value), attention_scores
     
     def forward(self, q, k, v, mask):
-        query = self.w_q(q) # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
-        key = self.w_k(k) # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
-        value = self.w_v(v) # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
+        # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
+        query = self.w_q(q) 
+        key = self.w_k(k)
+        value = self.w_v(v)
         
-        # (batch, seq_len, d_model) --> (batch, seq_len, h, d_k) --> (batch, h, seq_len, d_k)
-        query = query.view(query.shape[0], query.shape[1], self.h, self.d_k).transpose(1, 2)
-        key = key.view(key.shape[0], key.shape[1], self.h, self.d_k).transpose(1, 2)
-        value = value.view(value.shape[0], value.shape[1], self.h, self.d_k).transpose(1, 2)
+        # (batch, seq_len, d_model) --> (batch, seq_len, h, d_k)
+        # (batch, seq_len, h, d_k) --> (batch, h, seq_len, d_k)
+        query = query.view(
+            query.shape[0], query.shape[1], self.h, self.d_k
+        ).transpose(1, 2)
+        key = key.view(
+            key.shape[0], key.shape[1], self.h, self.d_k
+        ).transpose(1, 2)
+        value = value.view(
+            value.shape[0], value.shape[1], self.h, self.d_k
+        ).transpose(1, 2)
         
         # Calculate attention
-        x, self.attention_scores = MultiHeadAttentionBlock.attention(query, key, value, mask, self.dropout)
+        x, self.attention_scores = MultiHeadAttentionBlock.attention(
+            query, key, value, mask, self.dropout
+        )
         
         # Combine all the heads together
         # (batch, h, seq_len, d_k) --> (batch, seq_len, h, d_k) --> (batch, seq_len, d_model)
-        x = x.transpose(1, 2).contiguous().view(x.shape[0], -1, self.h * self.d_k)
+        x = x.transpose(1, 2).contiguous()\
+            .view(x.shape[0], -1, self.h * self.d_k)
         
         # Multiply by Wo
         # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
         return self.w_o(x)
     
 class EncoderBlock(nn.Module):
-    def __init__(self, self_attention_block: MultiHeadAttentionBlock, feed_forward_block: FeedForwardBlock,  dropout: float) -> None : 
+    def __init__(self,
+                 self_attention_block: MultiHeadAttentionBlock,
+                 feed_forward_block: FeedForwardBlock,
+                 dropout: float
+                 ) -> None : 
         super().__init__()
         self.self_attention_block = self_attention_block
         self.feed_forward_block = feed_forward_block
         self.residual_connections = nn.ModuleList([ResidualConnection(dropout) for _ in range(2)])
         
     def forward(self, x, src_mask):
-        x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, src_mask))
+        x = self.residual_connections[0](
+            x, lambda x: self.self_attention_block(x, x, x, src_mask)
+        )
         x = self.residual_connections[1](x, self.feed_forward_block)
         return x
     
@@ -235,6 +256,7 @@ class LitTransformer(LightningModule):
         self.src_pos = src_pos
         self.tgt_pos = tgt_pos
         self.projection_layer = projection_layer
+        self.train_losses = []    
         
         self.val_count = 0 
         self.val_source_texts = [] 
@@ -255,14 +277,14 @@ class LitTransformer(LightningModule):
         tgt: torch.Tensor,
         tgt_mask: torch.Tensor
     ):
-        #- (batch, -seq_len, -d_model)
+        # (batch, seq_len, d_model)
         tgt = self.tgt_embed(tgt)
         tgt = self.tgt_pos(tgt)
         return self.decoder(
             tgt, encoder_output, src_mask, tgt_mask)
     
     def project(self, x):
-        # (batch, -seq_len, -vocab_size)
+        # (batch, seq_len, vocab_size)
         return self.projection_layer(x)
 
     def training_step(self, batch, batch_idx):
@@ -294,17 +316,14 @@ class LitTransformer(LightningModule):
                  prog_bar=True, on_step=True,
                  on_epoch=True)
         
+         if torch.isnan(loss) or torch.isinf(loss):
+                print("NaN or Inf loss encountered. Moving on to next batch")
+            else:          
+                self.train_losses.append(loss.item())
         
 
         return loss
     
-    # def training_step_end(self, batch, ):        
-    #     # Your train step end logic goes here
-    #     scale = self.scaler.get_scale()
-    #     self.scaler.update()
-    #     skip_lr_sched = (scale > self.sceler.get_scale())
-    #     if not skip_lr_sched:
-    #         self.scheduler.step()
 
     def validation_step(self, batch, batch_idx): 
         max_len = self.config['seq_len'] 
@@ -371,10 +390,11 @@ class LitTransformer(LightningModule):
     def test_step(self, batch, batch_idx):
         pass
     
-      
     def on_train_epoch_end(self, ):
-        
         curr_epoch = self.trainer.current_epoch + 1
+        epoch_loss = sum(self.train_losses) / len(self.train_losses)
+        self.train_losses = []
+        print(f"{curr_epoch} loss: {epoch_loss} ")
         if curr_epoch % 5 == 0:
             model_filename = get_weights_file_path(
                 self.config, f"{self.trainer.current_epoch:02d}") 
@@ -389,7 +409,13 @@ class LitTransformer(LightningModule):
             ) 
             
             
-    def greedy_decode(self, model, source, source_mask, tokenizer_src, tokenizer_tgt, max_len): 
+    def greedy_decode(self,
+                      model,
+                      source,
+                      source_mask,
+                      tokenizer_src,
+                      tokenizer_tgt,
+                      max_len): 
     
         sos_idx = tokenizer_tgt.token_to_id('[SOS]')
         eos_idx = tokenizer_tgt.token_to_id('[EOS]')

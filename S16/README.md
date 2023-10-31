@@ -6,7 +6,7 @@ English to French translation using Opus dataset. Optimizing the training time o
 - One cycle policy
 - Mixed precision training (Mixed-16)
 - dynamic max_sequence length for batches
-- cycle encoder and decoder layers
+- cycle encoder and decoder layers; so effectively n/2 layers are only learned.
 - Removes all English sentences with more than 150 "tokens"
 - Removes all french sentences where len(fench_sentences) > len(english_sentrnce) + 10
 

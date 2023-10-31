@@ -1,9 +1,7 @@
 from torch.utils.data import DataLoader, random_split
 
-import os 
 from pathlib import Path
 import torch
-import torch.nn as nn
 from torch.utils.data import Dataset
 from pytorch_lightning import LightningDataModule
 from datasets import load_dataset 
@@ -213,8 +211,6 @@ class TranslateDataset(LightningDataModule):
             batch_size=self.config['batch_size'], 
             shuffle=True, 
             collate_fn = self.collate_fn, 
-            # num_workers=min(os.cpu_count(), 4),
-            # persistent_workers=True,
             pin_memory=True,
         )
 
@@ -223,8 +219,6 @@ class TranslateDataset(LightningDataModule):
             self.val_ds,
             batch_size=1,
             shuffle=True, 
-            # num_workers=min(os.cpu_count(), 4),
-            # persistent_workers=True,
             pin_memory=True,
         ) 
     
