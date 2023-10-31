@@ -316,10 +316,10 @@ class LitTransformer(LightningModule):
                  prog_bar=True, on_step=True,
                  on_epoch=True)
         
-         if torch.isnan(loss) or torch.isinf(loss):
-                print("NaN or Inf loss encountered. Moving on to next batch")
-            else:          
-                self.train_losses.append(loss.item())
+        if torch.isnan(loss) or torch.isinf(loss):
+            print("NaN or Inf loss encountered. Moving on to next batch")
+        else:          
+            self.train_losses.append(loss.item())
         
 
         return loss
