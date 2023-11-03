@@ -82,7 +82,7 @@ class PlTransformers(pl.LightningModule):
             tokenizer_tgt
         ) -> None:
         self.config = config
-        super().__init__(config)
+        super().__init__()
         Path(self.config['model_folder']).mkdir(parents=True, exist_ok=True)
         self.model = model
         self.tokenizer_src = tokenizer_src
@@ -108,9 +108,6 @@ class PlTransformers(pl.LightningModule):
         opt = self.optimizers()
         lr = opt.param_groups[0]['lr']
         self.log('learning_rate', lr)
-        x, y = batch
-        out = self(x)
-        loss = self.criterion(out, y)
         encoder_input = batch['encoder_input']
         decoder_input = batch['decoder_input']
         encoder_mask = batch['encoder_mask']
@@ -130,11 +127,11 @@ class PlTransformers(pl.LightningModule):
             "train_loss", loss, prog_bar=True,
             logger=True, on_step=True, on_epoch=True
         )
-        return 
+        return loss
 
     def validation_step(self, batch, batch_idx):
         run_batch_validation(
-            self.model,
+            self,
             batch,
             self.tokenizer_tgt,
             config['seq_len'],
@@ -151,17 +148,15 @@ if __name__ == '__main__':
         strategy=config['STRATEGY'],
         max_epochs = 30,
         enable_progress_bar = True,
-        #overfit_batches = 10,
         log_every_n_steps = 1,
-        # precision='16-mixed',
+        precision='16-mixed',
         limit_train_batches=0.05,
         check_val_every_n_epoch=2,
-        num_sanity_val_steps=2,
+        num_sanity_val_steps=0,
         limit_val_batches=10,
         # limit_val_batches=0.02,
         # check_val_every_n_epoch=10,
         # limit_test_batches=0.01,
-        # num_sanity_val_steps = 0
         # detect_anomaly=True
     )
 
@@ -176,43 +171,12 @@ if __name__ == '__main__':
     )
  
 
-    # Load the model state_dict from the checkpoint
     transformer = PlTransformers(
         config, 
         model,
         data_module.tokenizer_src,
         data_module.tokenizer_tgt
     )
-    # .load_from_checkpoint(checkpoint_path, 
-    #     map_location=config.DEVICE)
 
-    # Instantiate a Trainer and continue training
     trainer.fit(transformer, datamodule=data_module)
 
-# preload the model
-
-# initial_epoch = 0
-# global_step = 0
-# if config['preload']:
-#     model_filename = get_weights_file_path(config, config['preload'])
-#     print(f'preloading model {model_filename}')
-#
-#     state = torch.load(model_filename)
-#     model.load_state_dict(state['model_state_dict'])
-#
-#     initial_epoch = state['epoch'] + 1
-#     optimizer.load_state_dict(state['optimizer_state_dict'])
-#     global_step = state['global_step']
-#     print("preloaded")
-#
-#
-# saving the model
-
-# model_filename = get_weights_file_path(config, f"{epoch:02d}")
-# torch.save({
-#     'epoch': epoch,
-#     'model_state_dict': model.state_dict(),
-#     "optimizer_state_dict": optimizer.state_dict(),
-#     "global_step": global_step
-# }, model_filename)
-#

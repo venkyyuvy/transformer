@@ -29,34 +29,34 @@ def greddy_decode(
     source_mask, 
     tokenizer_tgt,
     max_len,
-    device='cuda'):
+    ):
     sos_idx = tokenizer_tgt.token_to_id('[SOS]')
     eos_idx = tokenizer_tgt.token_to_id('[EOS]')
 
     # precompute the encoder output and resuse it for every step
-    encoder_output = model.encode(source, source_mask)
+    encoder_output = model.model.encode(source, source_mask)
 
-    decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(source).to(device)
+    decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(source).to(model.device)
 
     while True:
         if decoder_input.size(1) == max_len:
             break
 
-        decoder_mask = causal_mask(decoder_input.size(1)).type_as(source_mask).to(device)
+        decoder_mask = causal_mask(decoder_input.size(1)).type_as(source_mask).to(model.device)
 
         # calculate output
-        out = model.decode(
+        out = model.model.decode(
             encoder_output, source_mask, decoder_input, decoder_mask)
 
         # get next token
-        prob = model.project(out[:, -1])
+        prob = model.model.project(out[:, -1])
         _, next_word = torch.max(prob, dim=-1)
         next_word = next_word.data[0]
         decoder_input = torch.cat(
             [
                 decoder_input,
                 torch.empty(1, 1).type_as(source)\
-                .fill_(next_word.item()).to(device)
+                .fill_(next_word.item()).to(model.device)
             ],
             dim=0
         )
@@ -107,7 +107,6 @@ def run_validation(
                 encoder_mask,
                 tokenizer_tgt,
                 max_len,
-                device
             )
 
             source_text = batch["src_text"][0]
@@ -388,10 +387,10 @@ def run_batch_validation(
         predicted.append(model_out_text)
 
 
-        print_msg('-' * console_width)
-        print_msg(f"{f'SOURCE: ': < 12} {source_text}")
-        print_msg(f"{f'TARGET: ': < 12} {target_text}")
-        print_msg(f"{f'PREDICTED: ': < 12} {model_out_text}")
+        print('-' * console_width)
+        print(f"{f'SOURCE: ': < 12} {source_text}")
+        print(f"{f'TARGET: ': < 12} {target_text}")
+        print(f"{f'PREDICTED: ': < 12} {model_out_text}")
 
 
     if writer:

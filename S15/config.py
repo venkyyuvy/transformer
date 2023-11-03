@@ -4,7 +4,7 @@ def get_config():
     return {
         "DEVICE": "cuda",
         "STRATEGY": "ddp_find_unused_parameters_true",
-        "batch_size": 16,
+        "batch_size": 4,
         "num_epochs": 20,
         "num_workers": 0,
         "lr": 10**-4,
